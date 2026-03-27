@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "PhotoVerify - Product Photo Verification",
+  "version": "1.0.0",
+  "description": "Right-click any product image to verify if it's original or duplicated from another listing.",
+  "permissions": ["contextMenus", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PhotoVerify"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

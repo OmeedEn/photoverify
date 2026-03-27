@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="shieldGradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0e0e0"/>
+    </linearGradient>
+  </defs>
+  <!-- Shield shape - clean geometric -->
+  <path d="M100 12 L176 52 L176 108 C176 148 144 180 100 196 C56 180 24 148 24 108 L24 52 Z"
+        fill="none" stroke="url(#shieldGradLight)" stroke-width="8" stroke-linejoin="round"/>
+  <!-- Inner shield fill with subtle opacity -->
+  <path d="M100 28 L164 62 L164 110 C164 143 137 170 100 184 C63 170 36 143 36 110 L36 62 Z"
+        fill="#ffffff" fill-opacity="0.06"/>
+  <!-- Camera lens circle -->
+  <circle cx="100" cy="100" r="32" fill="none" stroke="#ffffff" stroke-width="5"/>
+  <circle cx="100" cy="100" r="18" fill="none" stroke="#ffffff" stroke-width="3" stroke-opacity="0.4"/>
+  <!-- Checkmark overlay -->
+  <path d="M82 100 L94 112 L118 88" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
