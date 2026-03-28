@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, BarChart3, Home, LogOut, Ticket, DollarSign, Fingerprint, AlertTriangle, ScanEye } from "lucide-react";
+import { Search, BarChart3, LogOut, Ticket, DollarSign, Fingerprint, AlertTriangle, ScanEye } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "./AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 
 const navLinks = [
-  { href: "/", label: "Home", icon: Home },
   { href: "/verify", label: "Verify", icon: Search },
   { href: "/verify-ticket", label: "Tickets", icon: Ticket },
   { href: "/price-check", label: "Price", icon: DollarSign },
@@ -49,8 +48,8 @@ export function Navbar() {
               color: "var(--text-primary)",
             }}
           >
-            Photo
-            <span style={{ color: "var(--accent)" }}>Verify</span>
+            Trust
+            <span style={{ color: "var(--accent)" }}>Lens</span>
           </span>
         </Link>
 

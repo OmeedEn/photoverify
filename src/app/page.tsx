@@ -295,7 +295,7 @@ export default function HomePage() {
           fontFamily: "var(--font-mono)",
         }}
       >
-        PhotoVerify -- Product Photo Verification
+        TrustLens -- Product Photo Verification
       </footer>
     </div>
   );

@@ -85,7 +85,7 @@ function LoginContent() {
               color: "var(--text-primary)",
             }}
           >
-            Sign in to PhotoVerify
+            Sign in to TrustLens
           </h1>
           <p
             className="mt-2 text-sm"
