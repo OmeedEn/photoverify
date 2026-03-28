@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import sharp from "sharp";
 
 /**
  * Generate a perceptual hash (simplified dHash) from image buffer.
@@ -8,8 +9,6 @@ import crypto from "crypto";
 export async function generatePerceptualHash(
   imageBuffer: Buffer
 ): Promise<string> {
-  // Use sharp to resize to 9x8 grayscale for dHash
-  const sharp = (await import("sharp")).default;
   const pixels = await sharp(imageBuffer)
     .resize(9, 8, { fit: "fill" })
     .grayscale()

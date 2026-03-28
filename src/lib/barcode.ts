@@ -3,6 +3,9 @@
  * Uses sharp for image processing and jsQR for QR code detection.
  */
 
+import sharp from "sharp";
+import jsQR from "jsqr";
+
 export type BarcodeResult = {
   type: "qr" | "barcode" | "none";
   data: string | null;
@@ -21,9 +24,6 @@ const codeStore: Map<string, { count: number; firstSeenAt: string }> = new Map()
 export async function extractQRCode(
   imageBuffer: Buffer
 ): Promise<string | null> {
-  const sharp = (await import("sharp")).default;
-  const jsQR = (await import("jsqr")).default;
-
   // Get raw RGBA pixel data from the image
   const { data, info } = await sharp(imageBuffer)
     .ensureAlpha()

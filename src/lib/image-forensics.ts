@@ -8,6 +8,8 @@
  * 4. JPEG ghost detection - Multiple save artifacts indicate editing
  */
 
+import sharp from "sharp";
+
 interface MetadataSignal {
   tool: string;
   confidence: "high" | "medium" | "low";
@@ -132,7 +134,7 @@ async function analyzeMetadata(
  * Manipulated regions show different error levels than the original.
  */
 async function performELA(imageBuffer: Buffer): Promise<ELAResult> {
-  const sharp = (await import("sharp")).default;
+
 
   try {
     // Get original pixel data
@@ -195,7 +197,7 @@ async function performELA(imageBuffer: Buffer): Promise<ELAResult> {
  * Real photos from cameras have sensor noise that varies across the image.
  */
 async function analyzeNoise(imageBuffer: Buffer): Promise<NoiseResult> {
-  const sharp = (await import("sharp")).default;
+
 
   try {
     // Convert to grayscale and get raw pixels
