@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, BarChart3, Home, LogOut, Ticket, DollarSign, Fingerprint, AlertTriangle } from "lucide-react";
+import { Search, BarChart3, Home, LogOut, Ticket, DollarSign, Fingerprint, AlertTriangle, ScanEye } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "./AuthProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +13,7 @@ const navLinks = [
   { href: "/verify-ticket", label: "Tickets", icon: Ticket },
   { href: "/price-check", label: "Price", icon: DollarSign },
   { href: "/challenge", label: "Challenge", icon: Fingerprint },
+  { href: "/forensics", label: "AI Detect", icon: ScanEye },
   { href: "/scam-feed", label: "Feed", icon: AlertTriangle },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
 ];
