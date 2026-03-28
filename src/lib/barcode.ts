@@ -5,6 +5,7 @@
 
 import sharp from "sharp";
 import jsQR from "jsqr";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export type BarcodeResult = {
   type: "qr" | "barcode" | "none";
@@ -14,17 +15,12 @@ export type BarcodeResult = {
   firstSeenAt: string | null;
 };
 
-// In-memory store for seen codes: code -> { count, firstSeenAt }
-const codeStore: Map<string, { count: number; firstSeenAt: string }> = new Map();
+const codeStore: Map<string, { count: number; firstSeenAt: string }> =
+  new Map();
 
-/**
- * Extract a QR code from an image buffer using sharp + jsQR.
- * Returns the decoded string data or null if no QR code found.
- */
 export async function extractQRCode(
   imageBuffer: Buffer
 ): Promise<string | null> {
-  // Get raw RGBA pixel data from the image
   const { data, info } = await sharp(imageBuffer)
     .ensureAlpha()
     .raw()
@@ -43,51 +39,130 @@ export async function extractQRCode(
   return result?.data ?? null;
 }
 
-/**
- * Extract a barcode from an image buffer.
- * Placeholder for MVP -- returns null. A future version could use
- * a barcode library (e.g. zbar-wasm, zxing) for 1D barcode detection.
- */
 export async function extractBarcode(
   imageBuffer: Buffer
 ): Promise<string | null> {
-  // Placeholder: horizontal line analysis for barcode-like patterns
-  // For MVP, we return null and rely on QR detection.
   void imageBuffer;
   return null;
 }
 
-/**
- * Check if a code has been seen before.
- */
-export function checkDuplicateCode(code: string): {
+export async function checkDuplicateCode(code: string): Promise<{
   isDuplicate: boolean;
   previousChecks: number;
   firstSeenAt: string | null;
-} {
-  const entry = codeStore.get(code);
-  if (!entry) {
+}> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    const entry = codeStore.get(code);
+    if (!entry) {
+      return { isDuplicate: false, previousChecks: 0, firstSeenAt: null };
+    }
+
+    return {
+      isDuplicate: true,
+      previousChecks: entry.count,
+      firstSeenAt: entry.firstSeenAt,
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("ticket_codes")
+    .select("check_count, first_seen_at")
+    .eq("code", code)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Ticket code lookup failed:", error);
+    const entry = codeStore.get(code);
+    if (!entry) {
+      return { isDuplicate: false, previousChecks: 0, firstSeenAt: null };
+    }
+
+    return {
+      isDuplicate: true,
+      previousChecks: entry.count,
+      firstSeenAt: entry.firstSeenAt,
+    };
+  }
+
+  if (!data) {
     return { isDuplicate: false, previousChecks: 0, firstSeenAt: null };
   }
+
+  const row = data as { check_count: number; first_seen_at: string };
+
   return {
     isDuplicate: true,
-    previousChecks: entry.count,
-    firstSeenAt: entry.firstSeenAt,
+    previousChecks: row.check_count,
+    firstSeenAt: row.first_seen_at,
   };
 }
 
-/**
- * Register a code in the store with a timestamp.
- * If the code already exists, increment its check count.
- */
-export function registerCode(code: string): void {
-  const existing = codeStore.get(code);
-  if (existing) {
-    existing.count += 1;
-  } else {
+export async function registerCode(code: string): Promise<void> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    const existing = codeStore.get(code);
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+
     codeStore.set(code, {
       count: 1,
       firstSeenAt: new Date().toISOString(),
     });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("ticket_codes")
+    .select("check_count")
+    .eq("code", code)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Ticket code register lookup failed:", error);
+    const existing = codeStore.get(code);
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+
+    codeStore.set(code, {
+      count: 1,
+      firstSeenAt: now,
+    });
+    return;
+  }
+
+  if (!data) {
+    const { error: insertError } = await supabase.from("ticket_codes").insert({
+      code,
+      check_count: 1,
+      first_seen_at: now,
+      last_seen_at: now,
+    });
+
+    if (insertError) {
+      console.error("Ticket code insert failed:", insertError);
+    }
+    return;
+  }
+
+  const row = data as { check_count: number };
+
+  const { error: updateError } = await supabase
+    .from("ticket_codes")
+    .update({
+      check_count: row.check_count + 1,
+      last_seen_at: now,
+    })
+    .eq("code", code);
+
+  if (updateError) {
+    console.error("Ticket code update failed:", updateError);
   }
 }

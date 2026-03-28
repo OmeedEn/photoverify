@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
+export const runtime = "nodejs";
+
 // Use the service role client to bypass RLS for subscription management
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

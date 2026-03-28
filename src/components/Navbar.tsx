@@ -2,17 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, BarChart3, LogOut, Ticket, DollarSign, Fingerprint, AlertTriangle, ScanEye } from "lucide-react";
+import { Search, BarChart3, LogOut, DollarSign, Fingerprint, AlertTriangle } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "./AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 
 const navLinks = [
-  { href: "/verify", label: "Verify", icon: Search },
-  { href: "/verify-ticket", label: "Tickets", icon: Ticket },
-  { href: "/price-check", label: "Price", icon: DollarSign },
+  { href: "/verify", label: "Scan", icon: Search },
+  { href: "/price-check", label: "Price Check", icon: DollarSign },
   { href: "/challenge", label: "Challenge", icon: Fingerprint },
-  { href: "/forensics", label: "AI Detect", icon: ScanEye },
   { href: "/scam-feed", label: "Feed", icon: AlertTriangle },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
 ];
@@ -54,8 +52,8 @@ export function Navbar() {
         </Link>
 
         {/* Navigation Links + Theme Toggle */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5">
             {navLinks.map((link) => {
               const isActive = pathname === link.href;
               const Icon = link.icon;
@@ -63,7 +61,7 @@ export function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200"
                   style={{
                     color: isActive ? "var(--accent)" : "var(--text-secondary)",
                     background: isActive ? "var(--accent-glow)" : "transparent",
@@ -82,7 +80,7 @@ export function Navbar() {
                     }
                   }}
                 >
-                  <Icon size={16} />
+                  <Icon size={14} />
                   {link.label}
                 </Link>
               );

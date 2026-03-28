@@ -63,25 +63,6 @@ export default function HomePage() {
 
         <div className="relative max-w-6xl mx-auto px-6 pt-24 pb-20">
           <div className="max-w-3xl mx-auto text-center">
-            {/* Badge */}
-            <div
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 fade-in-up"
-              style={{
-                background: "var(--accent-glow)",
-                border: "1px solid var(--border-accent)",
-              }}
-            >
-              <span
-                className="text-xs font-semibold uppercase tracking-wider"
-                style={{
-                  color: "var(--accent)",
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                Product Photo Verification
-              </span>
-            </div>
-
             {/* Headline */}
             <h1
               className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 fade-in-up stagger-1"
@@ -98,6 +79,17 @@ export default function HomePage() {
                 You Buy
               </span>
             </h1>
+
+            {/* Tag */}
+            <p
+              className="text-xs font-semibold uppercase tracking-widest mb-6 fade-in-up stagger-1"
+              style={{
+                color: "var(--accent)",
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              Product Photo Verification
+            </p>
 
             {/* Subheadline */}
             <p

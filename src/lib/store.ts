@@ -1,6 +1,8 @@
+import { createServiceClient } from "@/lib/supabase/service";
+
 /**
- * In-memory store for MVP. Replace with Supabase/Postgres for production.
- * Stores image hashes, verification results, and reported scam images.
+ * Durable image fingerprint store for production, with in-memory fallback
+ * when Supabase service credentials are unavailable.
  */
 
 export interface StoredImage {
@@ -39,48 +41,182 @@ export interface ExternalMatch {
   title?: string;
 }
 
-// In-memory storage (replace with DB in production)
+interface ImageFingerprintRow {
+  id: string;
+  exact_hash: string;
+  perceptual_hash: string;
+  uploaded_at: string;
+  source: string | null;
+  reported_as_scam: boolean;
+  match_count: number;
+}
+
 const imageStore: Map<string, StoredImage> = new Map();
 const resultStore: Map<string, VerificationResult> = new Map();
-const hashIndex: Map<string, string[]> = new Map(); // perceptualHash -> imageIds
 
-export function storeImage(image: StoredImage): void {
+function mapRow(row: ImageFingerprintRow): StoredImage {
+  return {
+    id: row.id,
+    exactHash: row.exact_hash,
+    perceptualHash: row.perceptual_hash,
+    uploadedAt: row.uploaded_at,
+    source: row.source ?? undefined,
+    reportedAsScam: row.reported_as_scam,
+    matchCount: row.match_count,
+  };
+}
+
+function storeImageInMemory(image: StoredImage): StoredImage {
   imageStore.set(image.id, image);
-
-  // Index by perceptual hash
-  const existing = hashIndex.get(image.perceptualHash) || [];
-  existing.push(image.id);
-  hashIndex.set(image.perceptualHash, existing);
+  return image;
 }
 
-export function getImage(id: string): StoredImage | undefined {
-  return imageStore.get(id);
+function getAllImagesInMemory(): StoredImage[] {
+  return Array.from(imageStore.values());
 }
 
-export function findByExactHash(hash: string): StoredImage | undefined {
-  for (const img of imageStore.values()) {
-    if (img.exactHash === hash) return img;
+export async function storeImage(image: StoredImage): Promise<StoredImage> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    return storeImageInMemory(image);
   }
-  return undefined;
+
+  const { data, error } = await supabase
+    .from("image_fingerprints")
+    .insert({
+      id: image.id,
+      exact_hash: image.exactHash,
+      perceptual_hash: image.perceptualHash,
+      uploaded_at: image.uploadedAt,
+      source: image.source ?? null,
+      reported_as_scam: image.reportedAsScam,
+      match_count: image.matchCount,
+    })
+    .select(
+      "id, exact_hash, perceptual_hash, uploaded_at, source, reported_as_scam, match_count"
+    )
+    .single();
+
+  if (error) {
+    console.error("Image fingerprint insert failed:", error);
+    return storeImageInMemory(image);
+  }
+
+  return mapRow(data as ImageFingerprintRow);
 }
 
-export function findSimilarImages(
+export async function getImage(id: string): Promise<StoredImage | undefined> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    return imageStore.get(id);
+  }
+
+  const { data, error } = await supabase
+    .from("image_fingerprints")
+    .select(
+      "id, exact_hash, perceptual_hash, uploaded_at, source, reported_as_scam, match_count"
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Image fingerprint lookup failed:", error);
+    return imageStore.get(id);
+  }
+
+  return data ? mapRow(data as ImageFingerprintRow) : undefined;
+}
+
+export async function findByExactHash(
+  hash: string
+): Promise<StoredImage | undefined> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    return getAllImagesInMemory().find((img) => img.exactHash === hash);
+  }
+
+  const { data, error } = await supabase
+    .from("image_fingerprints")
+    .select(
+      "id, exact_hash, perceptual_hash, uploaded_at, source, reported_as_scam, match_count"
+    )
+    .eq("exact_hash", hash)
+    .order("uploaded_at", { ascending: true })
+    .limit(1);
+
+  if (error) {
+    console.error("Exact hash lookup failed:", error);
+    return getAllImagesInMemory().find((img) => img.exactHash === hash);
+  }
+
+  const rows = (data ?? []) as ImageFingerprintRow[];
+  return rows[0] ? mapRow(rows[0]) : undefined;
+}
+
+export async function findSimilarImages(
   perceptualHash: string,
   excludeId?: string
-): StoredImage[] {
-  const results: StoredImage[] = [];
-  for (const img of imageStore.values()) {
-    if (img.id === excludeId) continue;
-    // Simple check: exact perceptual hash match
-    if (img.perceptualHash === perceptualHash) {
-      results.push(img);
-    }
+): Promise<StoredImage[]> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    return getAllImagesInMemory().filter(
+      (img) =>
+        img.perceptualHash === perceptualHash &&
+        (!excludeId || img.id !== excludeId)
+    );
   }
-  return results;
+
+  let query = supabase
+    .from("image_fingerprints")
+    .select(
+      "id, exact_hash, perceptual_hash, uploaded_at, source, reported_as_scam, match_count"
+    )
+    .eq("perceptual_hash", perceptualHash);
+
+  if (excludeId) {
+    query = query.neq("id", excludeId);
+  }
+
+  const { data, error } = await query.order("uploaded_at", {
+    ascending: false,
+  });
+
+  if (error) {
+    console.error("Perceptual hash lookup failed:", error);
+    return getAllImagesInMemory().filter(
+      (img) =>
+        img.perceptualHash === perceptualHash &&
+        (!excludeId || img.id !== excludeId)
+    );
+  }
+
+  return ((data ?? []) as ImageFingerprintRow[]).map(mapRow);
 }
 
-export function getAllImages(): StoredImage[] {
-  return Array.from(imageStore.values());
+export async function getAllImages(): Promise<StoredImage[]> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    return getAllImagesInMemory();
+  }
+
+  const { data, error } = await supabase
+    .from("image_fingerprints")
+    .select(
+      "id, exact_hash, perceptual_hash, uploaded_at, source, reported_as_scam, match_count"
+    )
+    .order("uploaded_at", { ascending: false });
+
+  if (error) {
+    console.error("Image fingerprint list failed:", error);
+    return getAllImagesInMemory();
+  }
+
+  return ((data ?? []) as ImageFingerprintRow[]).map(mapRow);
 }
 
 export function storeResult(result: VerificationResult): void {
@@ -100,30 +236,97 @@ export function getRecentResults(limit: number = 20): VerificationResult[] {
     .slice(0, limit);
 }
 
-export function reportAsScam(imageId: string): boolean {
-  const img = imageStore.get(imageId);
-  if (!img) return false;
-  img.reportedAsScam = true;
-  img.matchCount += 1;
+export async function reportAsScam(imageId: string): Promise<boolean> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    const image = imageStore.get(imageId);
+    if (!image) {
+      return false;
+    }
+
+    image.reportedAsScam = true;
+    image.matchCount += 1;
+    return true;
+  }
+
+  const { data, error } = await supabase
+    .from("image_fingerprints")
+    .select("match_count")
+    .eq("id", imageId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Image fingerprint report lookup failed:", error);
+    const image = imageStore.get(imageId);
+    if (!image) {
+      return false;
+    }
+
+    image.reportedAsScam = true;
+    image.matchCount += 1;
+    return true;
+  }
+
+  if (!data) {
+    return false;
+  }
+
+  const row = data as { match_count: number };
+
+  const { error: updateError } = await supabase
+    .from("image_fingerprints")
+    .update({
+      reported_as_scam: true,
+      match_count: (row.match_count ?? 0) + 1,
+    })
+    .eq("id", imageId);
+
+  if (updateError) {
+    console.error("Image fingerprint report update failed:", updateError);
+    return false;
+  }
+
   return true;
 }
 
-export function getScamImages(): StoredImage[] {
-  return Array.from(imageStore.values()).filter((img) => img.reportedAsScam);
+export async function getScamImages(): Promise<StoredImage[]> {
+  const supabase = createServiceClient();
+
+  if (!supabase) {
+    return getAllImagesInMemory().filter((img) => img.reportedAsScam);
+  }
+
+  const { data, error } = await supabase
+    .from("image_fingerprints")
+    .select(
+      "id, exact_hash, perceptual_hash, uploaded_at, source, reported_as_scam, match_count"
+    )
+    .eq("reported_as_scam", true)
+    .order("uploaded_at", { ascending: false });
+
+  if (error) {
+    console.error("Scam fingerprint lookup failed:", error);
+    return getAllImagesInMemory().filter((img) => img.reportedAsScam);
+  }
+
+  return ((data ?? []) as ImageFingerprintRow[]).map(mapRow);
 }
 
-export function getStats() {
-  const images = Array.from(imageStore.values());
+export async function getStats() {
+  const images = await getAllImages();
   const results = Array.from(resultStore.values());
+
   return {
     totalChecks: results.length,
     totalImages: images.length,
-    scamsDetected: results.filter((r) => r.trustScore < 30).length,
-    scamReports: images.filter((i) => i.reportedAsScam).length,
+    scamsDetected: results.filter((result) => result.trustScore < 30).length,
+    scamReports: images.filter((image) => image.reportedAsScam).length,
     avgTrustScore:
       results.length > 0
         ? Math.round(
-            results.reduce((sum, r) => sum + r.trustScore, 0) / results.length
+            results.reduce((sum, result) => sum + result.trustScore, 0) /
+              results.length
           )
         : 0,
   };

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { addReport } from "@/lib/scam-feed";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -20,7 +22,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const report = addReport({ category, platform, description });
+    const report = await addReport({ category, platform, description });
     return NextResponse.json(report);
   } catch {
     return NextResponse.json(

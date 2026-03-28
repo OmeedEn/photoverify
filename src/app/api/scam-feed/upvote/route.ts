@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { upvoteReport } from "@/lib/scam-feed";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const success = upvoteReport(reportId);
+    const success = await upvoteReport(reportId);
     if (!success) {
       return NextResponse.json(
         { error: "Report not found" },

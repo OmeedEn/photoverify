@@ -25,17 +25,45 @@ interface Stats {
 
 interface HistoryResult {
   id: string;
-  imageId: string;
+  imageHash: string;
   trustScore: number;
-  internalMatches: Array<{ imageId: string }>;
-  externalMatches: Array<{ url: string; source: string }>;
+  verdict: string;
   checkedAt: string;
 }
 
-function getVerdictFromScore(score: number) {
-  if (score >= 70) return { label: "Original", class: "verdict-original", icon: CheckCircle };
-  if (score >= 30) return { label: "Suspicious", class: "verdict-found", icon: AlertTriangle };
-  return { label: "Scam", class: "verdict-scam", icon: XCircle };
+function getVerdictDetails(verdict: string, score: number) {
+  switch (verdict) {
+    case "likely_original":
+      return {
+        label: "Original",
+        class: "verdict-original",
+        icon: CheckCircle,
+      };
+    case "found_elsewhere":
+      return {
+        label: "Suspicious",
+        class: "verdict-found",
+        icon: AlertTriangle,
+      };
+    case "known_scam":
+      return { label: "Scam", class: "verdict-scam", icon: XCircle };
+    default:
+      if (score >= 70) {
+        return {
+          label: "Original",
+          class: "verdict-original",
+          icon: CheckCircle,
+        };
+      }
+      if (score >= 30) {
+        return {
+          label: "Suspicious",
+          class: "verdict-found",
+          icon: AlertTriangle,
+        };
+      }
+      return { label: "Scam", class: "verdict-scam", icon: XCircle };
+  }
 }
 
 export default function DashboardPage() {
@@ -198,32 +226,31 @@ export default function DashboardPage() {
             <div>
               {/* Table Header */}
               <div
-                className="grid grid-cols-[1fr_100px_120px_140px_100px] gap-4 px-6 py-3 text-xs font-semibold uppercase tracking-wider"
+                className="grid grid-cols-[1fr_100px_120px_100px] gap-4 px-6 py-3 text-xs font-semibold uppercase tracking-wider"
                 style={{
                   color: "var(--text-tertiary)",
                   fontFamily: "var(--font-mono)",
                   borderBottom: "1px solid var(--border)",
                 }}
               >
-                <span>ID</span>
+                <span>Image Hash</span>
                 <span>Score</span>
                 <span>Verdict</span>
-                <span>Matches</span>
                 <span>Time</span>
               </div>
 
               {/* Table Rows */}
               {results.map((result, i) => {
-                const verdict = getVerdictFromScore(result.trustScore);
+                const verdict = getVerdictDetails(
+                  result.verdict,
+                  result.trustScore
+                );
                 const VerdictIcon = verdict.icon;
-                const totalMatches =
-                  result.internalMatches.length +
-                  result.externalMatches.length;
 
                 return (
                   <div
                     key={result.id}
-                    className="grid grid-cols-[1fr_100px_120px_140px_100px] gap-4 px-6 py-4 items-center transition-colors fade-in"
+                    className="grid grid-cols-[1fr_100px_120px_100px] gap-4 px-6 py-4 items-center transition-colors fade-in"
                     style={{
                       borderBottom:
                         i < results.length - 1
@@ -245,7 +272,7 @@ export default function DashboardPage() {
                         fontFamily: "var(--font-mono)",
                       }}
                     >
-                      {result.id.slice(0, 8)}...
+                      {result.imageHash.slice(0, 12)}...
                     </span>
 
                     <div>
@@ -255,19 +282,6 @@ export default function DashboardPage() {
                     <span className={`verdict-badge ${verdict.class}`} style={{ fontSize: "11px", padding: "4px 10px" }}>
                       <VerdictIcon size={12} />
                       {verdict.label}
-                    </span>
-
-                    <span
-                      className="text-sm"
-                      style={{
-                        color:
-                          totalMatches > 0
-                            ? "var(--warning)"
-                            : "var(--text-tertiary)",
-                        fontFamily: "var(--font-mono)",
-                      }}
-                    >
-                      {totalMatches} found
                     </span>
 
                     <span

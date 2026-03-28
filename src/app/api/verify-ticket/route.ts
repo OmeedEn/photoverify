@@ -14,6 +14,8 @@ import {
 import type { BarcodeResult } from "@/lib/barcode";
 import { v4 as uuidv4 } from "uuid";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
     // Step 2: Check for duplicate code
     let barcodeResult: BarcodeResult;
     if (detectedCode) {
-      const dupCheck = checkDuplicateCode(detectedCode);
+      const dupCheck = await checkDuplicateCode(detectedCode);
       barcodeResult = {
         type: codeType,
         data: detectedCode,
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
         firstSeenAt: dupCheck.firstSeenAt,
       };
       // Register the code (increments count or adds new entry)
-      registerCode(detectedCode);
+      await registerCode(detectedCode);
     } else {
       barcodeResult = {
         type: "none",
@@ -93,7 +95,7 @@ export async function POST(request: NextRequest) {
       generatePerceptualHash(buffer),
     ]);
 
-    const exactMatch = findByExactHash(exactHash);
+    const exactMatch = await findByExactHash(exactHash);
     const imageId = uuidv4();
     let imageDuplicate = false;
 
@@ -101,7 +103,7 @@ export async function POST(request: NextRequest) {
       imageDuplicate = true;
     } else {
       // Store the image for future comparisons
-      storeImage({
+      await storeImage({
         id: imageId,
         exactHash,
         perceptualHash,
@@ -111,7 +113,7 @@ export async function POST(request: NextRequest) {
       });
 
       // Check for similar images via perceptual hash
-      const similar = findSimilarImages(perceptualHash, imageId);
+      const similar = await findSimilarImages(perceptualHash, imageId);
       if (similar.length > 0) {
         imageDuplicate = true;
       }

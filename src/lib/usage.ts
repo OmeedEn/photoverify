@@ -1,14 +1,24 @@
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
+import { getCommunityReportCount } from "@/lib/scam-feed";
 
 export const FREE_SCAN_LIMIT = 5;
 
-/**
- * Get the number of scans the user has performed this calendar month.
- */
+export interface UserScan {
+  id: string;
+  image_hash: string;
+  trust_score: number;
+  verdict: string;
+  created_at: string;
+}
+
 export async function getMonthlyScansCount(userId: string): Promise<number> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const startOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1
+  ).toISOString();
 
   const { count, error } = await supabase
     .from("scans")
@@ -24,11 +34,8 @@ export async function getMonthlyScansCount(userId: string): Promise<number> {
   return count ?? 0;
 }
 
-/**
- * Check if the user has an active subscription.
- */
 export async function hasActiveSubscription(userId: string): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("subscriptions")
@@ -46,16 +53,13 @@ export async function hasActiveSubscription(userId: string): Promise<boolean> {
   return true;
 }
 
-/**
- * Record a new scan in the database.
- */
 export async function recordScan(params: {
   userId: string;
   imageHash: string;
   trustScore: number;
   verdict: string;
 }): Promise<void> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error } = await supabase.from("scans").insert({
     user_id: params.userId,
@@ -69,10 +73,6 @@ export async function recordScan(params: {
   }
 }
 
-/**
- * Check if a user can perform a scan.
- * Returns { allowed, remaining, isPro }.
- */
 export async function canUserScan(userId: string): Promise<{
   allowed: boolean;
   remaining: number;
@@ -96,22 +96,11 @@ export async function canUserScan(userId: string): Promise<{
   };
 }
 
-/**
- * Get user's scan history from the scans table.
- */
 export async function getUserScans(
   userId: string,
   limit = 20
-): Promise<
-  Array<{
-    id: string;
-    image_hash: string;
-    trust_score: number;
-    verdict: string;
-    created_at: string;
-  }>
-> {
-  const supabase = createClient();
+): Promise<UserScan[]> {
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("scans")
@@ -126,4 +115,68 @@ export async function getUserScans(
   }
 
   return data ?? [];
+}
+
+export async function getDashboardData(userId: string): Promise<{
+  results: Array<{
+    id: string;
+    imageHash: string;
+    trustScore: number;
+    verdict: string;
+    checkedAt: string;
+  }>;
+  stats: {
+    totalChecks: number;
+    scamsDetected: number;
+    scamReports: number;
+    avgTrustScore: number;
+  };
+}> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("scans")
+    .select("id, image_hash, trust_score, verdict, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching dashboard scans:", error);
+    return {
+      results: [],
+      stats: {
+        totalChecks: 0,
+        scamsDetected: 0,
+        scamReports: await getCommunityReportCount(),
+        avgTrustScore: 0,
+      },
+    };
+  }
+
+  const scans = data ?? [];
+  const communityReports = await getCommunityReportCount();
+  const totalChecks = scans.length;
+  const scamsDetected = scans.filter((scan) => scan.trust_score < 30).length;
+  const avgTrustScore =
+    scans.length > 0
+      ? Math.round(
+          scans.reduce((sum, scan) => sum + scan.trust_score, 0) / scans.length
+        )
+      : 0;
+
+  return {
+    results: scans.slice(0, 20).map((scan) => ({
+      id: scan.id,
+      imageHash: scan.image_hash,
+      trustScore: scan.trust_score,
+      verdict: scan.verdict,
+      checkedAt: scan.created_at,
+    })),
+    stats: {
+      totalChecks,
+      scamsDetected,
+      scamReports: communityReports,
+      avgTrustScore,
+    },
+  };
 }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reportAsScam, getImage } from "@/lib/store";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const image = getImage(imageId);
+    const image = await getImage(imageId);
     if (!image) {
       return NextResponse.json(
         { error: "Image not found" },
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const success = reportAsScam(imageId);
+    const success = await reportAsScam(imageId);
     if (!success) {
       return NextResponse.json(
         { error: "Failed to report image" },

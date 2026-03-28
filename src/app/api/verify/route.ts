@@ -11,6 +11,10 @@ import {
 import { searchAllSources } from "@/lib/external-search";
 import { calculateTrustScore } from "@/lib/scorer";
 import type { InternalMatch, VerificationResult } from "@/lib/store";
+import { createClient } from "@/lib/supabase/server";
+import { canUserScan, recordScan } from "@/lib/usage";
+
+export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,6 +51,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let currentUserId: string | null = null;
+
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      currentUserId = user?.id ?? null;
+
+      if (currentUserId) {
+        const usage = await canUserScan(currentUserId);
+
+        if (!usage.allowed) {
+          return NextResponse.json(
+            {
+              error:
+                "You have reached the free verification limit for this month. Upgrade to continue.",
+            },
+            { status: 403 }
+          );
+        }
+      }
+    } catch (authError) {
+      console.error("Usage check failed:", authError);
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Step 1: Generate hashes
@@ -56,8 +87,14 @@ export async function POST(request: NextRequest) {
     ]);
 
     // Step 2: Check for exact duplicate in our DB
-    const exactMatch = findByExactHash(exactHash);
+    const exactMatch = await findByExactHash(exactHash);
     if (exactMatch) {
+      const verdict = exactMatch.reportedAsScam
+        ? "known_scam"
+        : "found_elsewhere";
+      const reasons = exactMatch.reportedAsScam
+        ? ["This image exactly matches one previously reported as a scam."]
+        : ["This image exactly matches one previously seen in TrustLens."];
       const result: VerificationResult = {
         id: uuidv4(),
         imageId: exactMatch.id,
@@ -77,12 +114,26 @@ export async function POST(request: NextRequest) {
         checkedAt: new Date().toISOString(),
       };
       storeResult(result);
-      return NextResponse.json(result);
+
+      if (currentUserId) {
+        await recordScan({
+          userId: currentUserId,
+          imageHash: exactHash,
+          trustScore: result.trustScore,
+          verdict,
+        });
+      }
+
+      return NextResponse.json({
+        ...result,
+        verdict,
+        reasons,
+      });
     }
 
     // Step 3: Store the new image
     const imageId = uuidv4();
-    storeImage({
+    await storeImage({
       id: imageId,
       exactHash,
       perceptualHash,
@@ -92,7 +143,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Step 4: Find similar images internally (perceptual hash)
-    const similarImages = findSimilarImages(perceptualHash, imageId);
+    const similarImages = await findSimilarImages(perceptualHash, imageId);
     const internalMatches: InternalMatch[] = similarImages.map((img) => ({
       imageId: img.id,
       similarity: 95,
@@ -102,7 +153,7 @@ export async function POST(request: NextRequest) {
     }));
 
     // Step 5: Check against known scam database
-    const scamImages = getScamImages();
+    const scamImages = await getScamImages();
     const isReportedScam = scamImages.some(
       (img) => img.perceptualHash === perceptualHash
     );
@@ -137,6 +188,15 @@ export async function POST(request: NextRequest) {
       checkedAt: new Date().toISOString(),
     };
     storeResult(result);
+
+    if (currentUserId) {
+      await recordScan({
+        userId: currentUserId,
+        imageHash: exactHash,
+        trustScore: result.trustScore,
+        verdict: scoring.verdict,
+      });
+    }
 
     return NextResponse.json({
       ...result,
