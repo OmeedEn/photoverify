@@ -1,4 +1,4 @@
-// TrustLens - Chrome Extension Background Service Worker
+// VerifyDeal - Chrome Extension Background Service Worker
 
 const API_BASE = "http://localhost:3000";
 
@@ -6,7 +6,7 @@ const API_BASE = "http://localhost:3000";
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "photoverify-check",
-    title: "Verify this image with TrustLens",
+    title: "Verify this image with VerifyDeal",
     contexts: ["image"],
   });
 });
@@ -42,9 +42,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         chrome.action.openPopup();
       }
     } catch (error) {
-      console.error("TrustLens error:", error);
+      console.error("VerifyDeal error:", error);
       chrome.storage.local.set({
-        lastResult: { error: "Failed to verify image. Is the TrustLens server running?" },
+        lastResult: { error: "Failed to verify image. Is the VerifyDeal server running?" },
         lastImageUrl: info.srcUrl,
         lastCheckedAt: new Date().toISOString(),
       });

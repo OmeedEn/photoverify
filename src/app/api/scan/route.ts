@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       const verdict = exactMatch.reportedAsScam ? "known_scam" : "found_elsewhere";
       const reasons = exactMatch.reportedAsScam
         ? ["This image exactly matches one previously reported as a scam."]
-        : ["This image exactly matches one previously seen in TrustLens."];
+        : ["This image exactly matches one previously seen in VerifyDeal."];
       verification = {
         id: uuidv4(),
         imageId: exactMatch.id,

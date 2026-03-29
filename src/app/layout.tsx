@@ -4,7 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { AuthProvider } from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
-  title: "TrustLens - Product Photo Verification",
+  title: "VerifyDeal - Product Photo Verification",
   description:
     "Verify product photos from marketplace listings. Detect duplicates, stolen images, and scam listings across the web.",
   icons: {

@@ -46,8 +46,8 @@ export function Navbar() {
               color: "var(--text-primary)",
             }}
           >
-            Trust
-            <span style={{ color: "var(--accent)" }}>Lens</span>
+            Verify
+            <span style={{ color: "var(--accent)" }}>Deal</span>
           </span>
         </Link>
 
