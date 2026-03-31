@@ -2,11 +2,13 @@
  * External reverse image search integrations.
  * Uses TinEye API and SerpAPI (Google Lens) for web-wide duplicate detection.
  *
- * For MVP: these return mock/demo results when API keys aren't configured.
+ * Returns empty results when API keys aren't configured.
  * Set TINEYE_API_KEY and SERPAPI_KEY in .env.local to enable real searches.
  */
 
 import type { ExternalMatch } from "./store";
+
+const EXTERNAL_TIMEOUT_MS = 30_000;
 
 // ─── TinEye Integration ───
 
@@ -21,9 +23,11 @@ export async function searchTinEye(
   const apiKey = process.env.TINEYE_API_KEY;
 
   if (!apiKey) {
-    // Demo mode - return empty results
     return { matches: [], totalResults: 0 };
   }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXTERNAL_TIMEOUT_MS);
 
   try {
     const formData = new FormData();
@@ -38,6 +42,7 @@ export async function searchTinEye(
       {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       }
     );
 
@@ -65,8 +70,14 @@ export async function searchTinEye(
       totalResults: data.result?.total_results || 0,
     };
   } catch (error) {
-    console.error("TinEye search failed:", error);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      console.error("TinEye search timed out after", EXTERNAL_TIMEOUT_MS, "ms");
+    } else {
+      console.error("TinEye search failed:", error instanceof Error ? error.message : error);
+    }
     return { matches: [], totalResults: 0 };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -83,12 +94,13 @@ export async function searchGoogleLens(
   const apiKey = process.env.SERPAPI_KEY;
 
   if (!apiKey) {
-    // Demo mode
     return { matches: [], totalResults: 0 };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXTERNAL_TIMEOUT_MS);
+
   try {
-    // SerpAPI requires a URL or base64 image
     const base64 = imageBuffer.toString("base64");
     const dataUrl = `data:image/jpeg;base64,${base64}`;
 
@@ -99,7 +111,8 @@ export async function searchGoogleLens(
     });
 
     const response = await fetch(
-      `https://serpapi.com/search?${params.toString()}`
+      `https://serpapi.com/search?${params.toString()}`,
+      { signal: controller.signal }
     );
 
     if (!response.ok) {
@@ -125,8 +138,14 @@ export async function searchGoogleLens(
       totalResults: visualMatches.length,
     };
   } catch (error) {
-    console.error("Google Lens search failed:", error);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      console.error("SerpAPI search timed out after", EXTERNAL_TIMEOUT_MS, "ms");
+    } else {
+      console.error("Google Lens search failed:", error instanceof Error ? error.message : error);
+    }
     return { matches: [], totalResults: 0 };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -135,8 +154,6 @@ export async function searchGoogleLens(
 export async function checkStockPhotos(
   imageBuffer: Buffer
 ): Promise<boolean> {
-  // In production, check against Shutterstock/Getty/Unsplash APIs
-  // For MVP, this is a placeholder that uses buffer length as a no-op
   void imageBuffer;
   return false;
 }
@@ -148,7 +165,6 @@ export async function searchAllSources(imageBuffer: Buffer): Promise<{
   googleLens: GoogleLensResult;
   isStockPhoto: boolean;
 }> {
-  // Run all searches in parallel
   const [tinEye, googleLens, isStockPhoto] = await Promise.all([
     searchTinEye(imageBuffer),
     searchGoogleLens(imageBuffer),

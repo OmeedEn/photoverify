@@ -214,7 +214,7 @@ export default function UpgradePage() {
                   className="text-4xl font-bold"
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
-                  $4.99
+                  ${process.env.NEXT_PUBLIC_PRO_PRICE || "4.99"}
                 </span>
                 <span
                   className="text-sm"

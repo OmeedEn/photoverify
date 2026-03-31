@@ -279,7 +279,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer
-        className="py-8 text-center"
+        className="py-8"
         style={{
           borderTop: "1px solid var(--border)",
           color: "var(--text-tertiary)",
@@ -287,7 +287,20 @@ export default function HomePage() {
           fontFamily: "var(--font-mono)",
         }}
       >
-        VerifyDeal -- Product Photo Verification
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span>VerifyDeal -- Product Photo Verification</span>
+          <div className="flex items-center gap-4">
+            <Link href="/terms" className="footer-link">
+              Terms
+            </Link>
+            <Link href="/privacy" className="footer-link">
+              Privacy
+            </Link>
+            <a href="mailto:support@verifydeal.com" className="footer-link">
+              Contact
+            </a>
+          </div>
+        </div>
       </footer>
     </div>
   );

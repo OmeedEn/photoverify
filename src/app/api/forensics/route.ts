@@ -1,10 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeImage } from "@/lib/image-forensics";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
+const RATE_LIMIT = { limit: 20, windowSeconds: 60 };
+
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(ip, RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before trying again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          },
+        }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("image") as File | null;
 
@@ -41,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Forensics error:", error);
+    console.error("Forensics failed:", error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: "Analysis failed. Please try again." },
       { status: 500 }

@@ -51,6 +51,9 @@ interface ImageFingerprintRow {
   match_count: number;
 }
 
+const MAX_MEMORY_IMAGES = 5000;
+const MAX_MEMORY_RESULTS = 5000;
+
 const imageStore: Map<string, StoredImage> = new Map();
 const resultStore: Map<string, VerificationResult> = new Map();
 
@@ -67,6 +70,10 @@ function mapRow(row: ImageFingerprintRow): StoredImage {
 }
 
 function storeImageInMemory(image: StoredImage): StoredImage {
+  if (imageStore.size >= MAX_MEMORY_IMAGES) {
+    const oldest = imageStore.keys().next().value;
+    if (oldest) imageStore.delete(oldest);
+  }
   imageStore.set(image.id, image);
   return image;
 }
@@ -220,6 +227,10 @@ export async function getAllImages(): Promise<StoredImage[]> {
 }
 
 export function storeResult(result: VerificationResult): void {
+  if (resultStore.size >= MAX_MEMORY_RESULTS) {
+    const oldest = resultStore.keys().next().value;
+    if (oldest) resultStore.delete(oldest);
+  }
   resultStore.set(result.id, result);
 }
 

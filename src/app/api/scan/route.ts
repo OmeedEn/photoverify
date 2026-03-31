@@ -14,11 +14,31 @@ import { analyzeImage } from "@/lib/image-forensics";
 import { extractQRCode, checkDuplicateCode, registerCode } from "@/lib/barcode";
 import type { InternalMatch, VerificationResult } from "@/lib/store";
 import type { BarcodeResult } from "@/lib/barcode";
+import { createClient } from "@/lib/supabase/server";
+import { canUserScan, recordScan } from "@/lib/usage";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
+const RATE_LIMIT = { limit: 20, windowSeconds: 60 };
+
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(ip, RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before scanning again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          },
+        }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("image") as File | null;
 
@@ -48,6 +68,32 @@ export async function POST(request: NextRequest) {
         { error: "File too large. Maximum size is 10MB." },
         { status: 400 }
       );
+    }
+
+    // Check authenticated user's usage quota
+    let currentUserId: string | null = null;
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      currentUserId = user?.id ?? null;
+
+      if (currentUserId) {
+        const usage = await canUserScan(currentUserId);
+        if (!usage.allowed) {
+          return NextResponse.json(
+            {
+              error:
+                "You have reached the free verification limit for this month. Upgrade to continue.",
+            },
+            { status: 403 }
+          );
+        }
+      }
+    } catch (authError) {
+      console.error("Usage check failed:", authError);
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -90,6 +136,15 @@ export async function POST(request: NextRequest) {
         reasons,
       };
       storeResult(verification);
+
+      if (currentUserId) {
+        await recordScan({
+          userId: currentUserId,
+          imageHash: exactHash,
+          trustScore: verification.trustScore,
+          verdict,
+        }).catch((err) => console.error("Failed to record scan:", err));
+      }
     } else {
       const imageId = uuidv4();
       await storeImage({
@@ -144,6 +199,15 @@ export async function POST(request: NextRequest) {
         reasons: scoring.reasons,
       };
       storeResult(verification);
+
+      if (currentUserId) {
+        await recordScan({
+          userId: currentUserId,
+          imageHash: exactHash,
+          trustScore: verification.trustScore,
+          verdict: scoring.verdict,
+        }).catch((err) => console.error("Failed to record scan:", err));
+      }
     }
 
     // --- Barcode/QR Check ---
@@ -173,7 +237,7 @@ export async function POST(request: NextRequest) {
       barcode: barcodeResult,
     });
   } catch (error) {
-    console.error("Unified scan error:", error);
+    console.error("Scan failed:", error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: "Scan failed. Please try again." },
       { status: 500 }

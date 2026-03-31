@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+.footer-link {
+  color: var(--text-tertiary);
+  transition: color 0.2s;
+}
+.footer-link:hover {
+  color: var(--accent);
+}
+
 :root {
   --bg-primary: #0a0e14;
   --bg-secondary: #0f1419;

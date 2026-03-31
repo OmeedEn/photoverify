@@ -13,11 +13,29 @@ import {
 } from "@/lib/barcode";
 import type { BarcodeResult } from "@/lib/barcode";
 import { v4 as uuidv4 } from "uuid";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
+const RATE_LIMIT = { limit: 20, windowSeconds: 60 };
+
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(ip, RATE_LIMIT);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too many requests. Please wait before verifying again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          },
+        }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("image") as File | null;
 
@@ -28,7 +46,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
     const validTypes = [
       "image/jpeg",
       "image/png",
@@ -43,7 +60,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json(
         { error: "File too large. Maximum size is 10MB." },
@@ -53,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Step 1: Extract QR code and barcode in parallel
+    // Extract QR code and barcode in parallel
     const [qrData, barcodeData] = await Promise.all([
       extractQRCode(buffer),
       extractBarcode(buffer),
@@ -66,7 +82,7 @@ export async function POST(request: NextRequest) {
       ? "barcode"
       : "none";
 
-    // Step 2: Check for duplicate code
+    // Check for duplicate code
     let barcodeResult: BarcodeResult;
     if (detectedCode) {
       const dupCheck = await checkDuplicateCode(detectedCode);
@@ -77,7 +93,6 @@ export async function POST(request: NextRequest) {
         previousChecks: dupCheck.previousChecks,
         firstSeenAt: dupCheck.firstSeenAt,
       };
-      // Register the code (increments count or adds new entry)
       await registerCode(detectedCode);
     } else {
       barcodeResult = {
@@ -89,9 +104,9 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Step 3: Also run perceptual hash check for image duplicate detection
+    // Run perceptual hash check for image duplicate detection
     const [exactHash, perceptualHash] = await Promise.all([
-      Promise.resolve(generateExactHash(buffer)),
+      generateExactHash(buffer),
       generatePerceptualHash(buffer),
     ]);
 
@@ -102,7 +117,6 @@ export async function POST(request: NextRequest) {
     if (exactMatch) {
       imageDuplicate = true;
     } else {
-      // Store the image for future comparisons
       await storeImage({
         id: imageId,
         exactHash,
@@ -112,38 +126,33 @@ export async function POST(request: NextRequest) {
         matchCount: 0,
       });
 
-      // Check for similar images via perceptual hash
       const similar = await findSimilarImages(perceptualHash, imageId);
       if (similar.length > 0) {
         imageDuplicate = true;
       }
     }
 
-    // Step 4: Calculate trust score and verdict
+    // Calculate trust score and verdict
     let trustScore = 100;
     const reasons: string[] = [];
 
     if (barcodeResult.type === "none") {
-      // No QR/barcode found -- cannot verify the ticket code
       trustScore = 100;
       reasons.push(
         "No QR code or barcode detected in this image. Upload a clear photo of the ticket code for duplicate checking."
       );
     } else if (barcodeResult.isDuplicate) {
-      // Duplicate code found -- high scam risk
       trustScore = 10;
       reasons.push(
         `Duplicate ticket code detected. This code has been checked ${barcodeResult.previousChecks} time(s) before. First seen on ${new Date(barcodeResult.firstSeenAt!).toLocaleDateString()}.`
       );
     } else {
-      // First time this code has been seen
       trustScore = 100;
       reasons.push(
         "This ticket code has not been seen before. No duplicates found."
       );
     }
 
-    // Subtract points for image duplicates
     if (imageDuplicate) {
       trustScore = Math.max(5, trustScore - 30);
       reasons.push(
@@ -151,7 +160,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine verdict
     let verdict: "likely_original" | "found_elsewhere" | "known_scam";
     if (trustScore >= 70) {
       verdict = "likely_original";
@@ -169,7 +177,7 @@ export async function POST(request: NextRequest) {
       imageHash: exactHash,
     });
   } catch (error) {
-    console.error("Ticket verification error:", error);
+    console.error("Ticket verification failed:", error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: "Ticket verification failed. Please try again." },
       { status: 500 }

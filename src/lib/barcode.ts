@@ -15,6 +15,8 @@ export type BarcodeResult = {
   firstSeenAt: string | null;
 };
 
+const MAX_MEMORY_CODES = 5000;
+
 const codeStore: Map<string, { count: number; firstSeenAt: string }> =
   new Map();
 
@@ -109,6 +111,10 @@ export async function registerCode(code: string): Promise<void> {
       return;
     }
 
+    if (codeStore.size >= MAX_MEMORY_CODES) {
+      const oldest = codeStore.keys().next().value;
+      if (oldest) codeStore.delete(oldest);
+    }
     codeStore.set(code, {
       count: 1,
       firstSeenAt: new Date().toISOString(),
