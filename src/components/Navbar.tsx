@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, BarChart3, LogOut, DollarSign, Fingerprint, AlertTriangle } from "lucide-react";
+import { Search, BarChart3, LogOut, DollarSign, Fingerprint, AlertTriangle, Menu, X } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "./AuthProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -19,6 +20,12 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -35,7 +42,7 @@ export function Navbar() {
         borderColor: "var(--border)",
       }}
     >
-      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
           <span
@@ -51,8 +58,8 @@ export function Navbar() {
           </span>
         </Link>
 
-        {/* Navigation Links + Theme Toggle */}
-        <div className="flex items-center gap-2">
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex items-center gap-2">
           <div className="flex items-center gap-0.5">
             {navLinks.map((link) => {
               const isActive = pathname === link.href;
@@ -94,7 +101,7 @@ export function Navbar() {
               {user ? (
                 <div className="flex items-center gap-3">
                   <span
-                    className="text-sm hidden sm:inline"
+                    className="text-sm hidden lg:inline"
                     style={{
                       color: "var(--text-secondary)",
                       fontFamily: "var(--font-mono)",
@@ -145,7 +152,96 @@ export function Navbar() {
             </>
           )}
         </div>
+
+        {/* Mobile: theme toggle + hamburger */}
+        <div className="flex md:hidden items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="p-2 rounded-lg transition-colors duration-200"
+            style={{ color: "var(--text-secondary)" }}
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile dropdown menu */}
+      {mobileOpen && (
+        <div
+          className="md:hidden border-t"
+          style={{
+            background: "var(--nav-bg)",
+            backdropFilter: "blur(16px) saturate(180%)",
+            borderColor: "var(--border)",
+          }}
+        >
+          <div className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-1">
+            {navLinks.map((link) => {
+              const isActive = pathname === link.href;
+              const Icon = link.icon;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                  style={{
+                    color: isActive ? "var(--accent)" : "var(--text-secondary)",
+                    background: isActive ? "var(--accent-glow)" : "transparent",
+                    fontFamily: "var(--font-display)",
+                  }}
+                >
+                  <Icon size={16} />
+                  {link.label}
+                </Link>
+              );
+            })}
+
+            <div className="my-1" style={{ height: 1, background: "var(--border)" }} />
+
+            {!loading && (
+              <>
+                {user ? (
+                  <div className="flex flex-col gap-1">
+                    <span
+                      className="px-3 py-1 text-xs truncate"
+                      style={{
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      {user.email}
+                    </span>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                      style={{
+                        color: "var(--text-secondary)",
+                        fontFamily: "var(--font-display)",
+                      }}
+                    >
+                      <LogOut size={16} />
+                      Log out
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200"
+                    style={{
+                      color: "var(--accent)",
+                      fontFamily: "var(--font-display)",
+                    }}
+                  >
+                    Log in
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
