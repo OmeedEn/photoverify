@@ -7,6 +7,7 @@
  */
 
 import type { InternalMatch, ExternalMatch } from "./store";
+import type { ForensicsResult } from "./image-forensics";
 
 interface ScoringInput {
   internalMatches: InternalMatch[];
@@ -14,6 +15,7 @@ interface ScoringInput {
   externalMatches: ExternalMatch[];
   isStockPhoto: boolean;
   isReportedScam: boolean;
+  forensics?: ForensicsResult;
 }
 
 interface ScoringResult {
@@ -86,6 +88,55 @@ export function calculateTrustScore(input: ScoringInput): ScoringResult {
       reasons.push(
         "Image appears on other marketplace listings - higher risk of reuse"
       );
+    }
+  }
+
+  // AI / Forensics signals
+  if (input.forensics) {
+    const f = input.forensics;
+
+    // AI generator detected in metadata (high confidence)
+    const aiMetadata = f.metadata.filter((m) =>
+      m.confidence === "high" && m.detail.toLowerCase().includes("ai generator")
+    );
+    if (aiMetadata.length > 0) {
+      score -= 40;
+      reasons.push(
+        `AI generation tool detected in metadata: ${aiMetadata.map((m) => m.tool).join(", ")}`
+      );
+    }
+
+    // Noise analysis flagged as AI-generated
+    if (f.noise.isAIGenerated) {
+      score -= 25;
+      reasons.push(
+        `Noise pattern is ${f.noise.uniformity}% uniform - consistent with AI-generated images`
+      );
+    }
+
+    // ELA detected manipulation
+    if (f.ela.isManipulated) {
+      score -= 20;
+      reasons.push(
+        `Error Level Analysis found ${f.ela.suspiciousRegions}% suspicious regions - possible editing or compositing`
+      );
+    }
+
+    // Editing software in metadata
+    const editMetadata = f.metadata.filter((m) =>
+      m.confidence === "medium" && m.detail.toLowerCase().includes("editing software")
+    );
+    if (editMetadata.length > 0) {
+      score -= 10;
+      reasons.push(
+        `Editing software detected: ${editMetadata.map((m) => m.tool).join(", ")}`
+      );
+    }
+
+    // Stripped metadata (minor signal)
+    if (f.metadata.some((m) => m.detail.includes("stripped")) && aiMetadata.length === 0) {
+      score -= 5;
+      reasons.push("Image metadata stripped - common in AI-generated and edited images");
     }
   }
 

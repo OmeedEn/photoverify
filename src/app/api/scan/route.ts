@@ -184,6 +184,7 @@ export async function POST(request: NextRequest) {
         externalMatches: allExternalMatches,
         isStockPhoto: externalResults.isStockPhoto,
         isReportedScam,
+        forensics,
       });
 
       verification = {
